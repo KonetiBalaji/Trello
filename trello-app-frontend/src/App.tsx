@@ -13,17 +13,10 @@ import ConfigError from './components/ConfigError/ConfigError';
 // Configure Amplify - these values should be replaced with actual values from backend deployment
 const awsconfig = {
   Auth: {
-    Cognito: {
-      userPoolId: process.env.REACT_APP_USER_POOL_ID || '',
-      userPoolClientId: process.env.REACT_APP_USER_POOL_CLIENT_ID || '',
-      loginWith: {
-        email: true
-      }
-    }
-  },
-  ...(process.env.REACT_APP_AWS_REGION && {
-    aws_project_region: process.env.REACT_APP_AWS_REGION
-  })
+    region: process.env.REACT_APP_AWS_REGION || '',
+    userPoolId: process.env.REACT_APP_USER_POOL_ID || '',
+    userPoolWebClientId: process.env.REACT_APP_USER_POOL_CLIENT_ID || ''
+  }
 };
 
 // Only configure if we have the required values
