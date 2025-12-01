@@ -25,5 +25,5 @@ yarn-error.log*
 # AWS Amplify
 amplify/
 .amplifyrc
-amplify.yml
+# Note: amplify.yml should be committed (needed for Amplify builds)
 
