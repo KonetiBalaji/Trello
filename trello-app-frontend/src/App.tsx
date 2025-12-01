@@ -8,6 +8,7 @@ import './App.css';
 import Dashboard from './components/Dashboard/Dashboard';
 import { AuthProvider } from './contexts/AuthContext';
 import { TaskProvider } from './contexts/TaskContext';
+import ConfigError from './components/ConfigError/ConfigError';
 
 // Configure Amplify - these values should be replaced with actual values from backend deployment
 const awsconfig = {
@@ -37,6 +38,16 @@ if (process.env.REACT_APP_USER_POOL_ID && process.env.REACT_APP_USER_POOL_CLIENT
 }
 
 function App() {
+  // Check if required environment variables are set
+  const isConfigured = 
+    process.env.REACT_APP_USER_POOL_ID && 
+    process.env.REACT_APP_USER_POOL_CLIENT_ID;
+
+  // Show configuration error if variables are missing
+  if (!isConfigured) {
+    return <ConfigError />;
+  }
+
   return (
     <Router>
       <Authenticator>
