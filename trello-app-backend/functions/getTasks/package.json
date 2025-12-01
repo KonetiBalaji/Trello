@@ -1,0 +1,11 @@
+{
+  "name": "get-tasks",
+  "version": "1.0.0",
+  "description": "Lambda function to get tasks for a user",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0"
+  }
+}
+

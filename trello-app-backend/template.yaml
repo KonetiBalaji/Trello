@@ -1,0 +1,565 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Trello-like Task Management Application Backend
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        TASKS_TABLE: !Ref TasksTable
+        COMMENTS_TABLE: !Ref CommentsTable
+        ACTIVITY_LOG_TABLE: !Ref ActivityLogTable
+        ACTIVITY_LOG_QUEUE_URL: !Ref ActivityLogQueue
+        REMINDER_QUEUE_URL: !Ref ReminderQueue
+        USER_POOL_ID: !Ref UserPool
+
+Resources:
+  # DynamoDB Tables
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: TasksTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: taskId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: taskId
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  CommentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CommentsTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: taskId
+          AttributeType: S
+        - AttributeName: commentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: taskId
+          KeyType: HASH
+        - AttributeName: commentId
+          KeyType: RANGE
+
+  ActivityLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ActivityLogTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: taskId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: taskId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+  # SQS Dead Letter Queues
+  ActivityLogDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: activity-log-dlq
+      MessageRetentionPeriod: 1209600
+
+  ReminderDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: reminder-dlq
+      MessageRetentionPeriod: 1209600
+
+  # SQS Queues
+  ActivityLogQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: activity-log-queue
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ActivityLogDLQ.Arn
+        maxReceiveCount: 3
+
+  ReminderQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: reminder-queue
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ReminderDLQ.Arn
+        maxReceiveCount: 3
+
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: TrelloAppUserPool
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: TrelloAppClient
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
+  # API Gateway
+  TrelloApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: TrelloAppApi
+      StageName: prod
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # Lambda Functions - Task CRUD
+  CreateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateTaskFunction
+      CodeUri: functions/createTask/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks
+            Method: POST
+
+  GetTasksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetTasksFunction
+      CodeUri: functions/getTasks/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks
+            Method: GET
+
+  UpdateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: UpdateTaskFunction
+      CodeUri: functions/updateTask/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}
+            Method: PUT
+
+  DeleteTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DeleteTaskFunction
+      CodeUri: functions/deleteTask/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}
+            Method: DELETE
+
+  # Lambda Functions - Comments
+  AddCommentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AddCommentFunction
+      CodeUri: functions/addComment/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}/comments
+            Method: POST
+
+  GetCommentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetCommentsFunction
+      CodeUri: functions/getComments/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}/comments
+            Method: GET
+
+  # Lambda Functions - Activity Log
+  GetActivityLogFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetActivityLogFunction
+      CodeUri: functions/getActivityLog/
+      Handler: index.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}/activity
+            Method: GET
+
+  # SQS Consumer Lambdas
+  SqsActivityLoggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SqsActivityLoggerFunction
+      CodeUri: functions/sqsActivityLogger/
+      Handler: index.handler
+      Events:
+        ActivityLogQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ActivityLogQueue.Arn
+            BatchSize: 10
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ActivityLogDLQ.Arn
+
+  SqsReminderProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: SqsReminderProcessorFunction
+      CodeUri: functions/sqsReminderProcessor/
+      Handler: index.handler
+      Events:
+        ReminderQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ReminderQueue.Arn
+            BatchSize: 10
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt ReminderDLQ.Arn
+
+  ScheduledReminderCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ScheduledReminderCheckerFunction
+      CodeUri: functions/scheduledReminderChecker/
+      Handler: index.handler
+      Timeout: 60
+      Events:
+        DailyReminderCheck:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Description: Check for tasks due soon and send reminders
+            Enabled: true
+
+  # CloudWatch Log Groups
+  CreateTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${CreateTaskFunction}'
+      RetentionInDays: 7
+
+  GetTasksLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GetTasksFunction}'
+      RetentionInDays: 7
+
+  UpdateTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${UpdateTaskFunction}'
+      RetentionInDays: 7
+
+  DeleteTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${DeleteTaskFunction}'
+      RetentionInDays: 7
+
+  AddCommentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AddCommentFunction}'
+      RetentionInDays: 7
+
+  GetCommentsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GetCommentsFunction}'
+      RetentionInDays: 7
+
+  GetActivityLogLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GetActivityLogFunction}'
+      RetentionInDays: 7
+
+  SqsActivityLoggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SqsActivityLoggerFunction}'
+      RetentionInDays: 7
+
+  SqsReminderProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SqsReminderProcessorFunction}'
+      RetentionInDays: 7
+
+  ScheduledReminderCheckerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ScheduledReminderCheckerFunction}'
+      RetentionInDays: 7
+
+  # CloudWatch Alarms - Lambda Function Errors
+  CreateTaskErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: CreateTaskErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CreateTaskFunction
+
+  GetTasksErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: GetTasksErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GetTasksFunction
+
+  UpdateTaskErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: UpdateTaskErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UpdateTaskFunction
+
+  DeleteTaskErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: DeleteTaskErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DeleteTaskFunction
+
+  AddCommentErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: AddCommentErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AddCommentFunction
+
+  SqsActivityLoggerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: SqsActivityLoggerErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SqsActivityLoggerFunction
+
+  SqsReminderProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: SqsReminderProcessorErrorAlarm
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SqsReminderProcessorFunction
+
+  # CloudWatch Alarms - Lambda Duration
+  CreateTaskDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: CreateTaskDurationAlarm
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CreateTaskFunction
+
+  # CloudWatch Alarms - SQS Queue Depth
+  ActivityLogQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ActivityLogQueueDepthAlarm
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ActivityLogQueue.QueueName
+
+  ReminderQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ReminderQueueDepthAlarm
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 100
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ReminderQueue.QueueName
+
+  # CloudWatch Alarms - API Gateway Errors
+  ApiGateway4xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ApiGateway4xxAlarm
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref TrelloApi
+
+  ApiGateway5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: ApiGateway5xxAlarm
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref TrelloApi
+
+Outputs:
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${TrelloApi}.execute-api.${AWS::Region}.amazonaws.com/prod'
+    Export:
+      Name: TrelloAppApiUrl
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: TrelloAppUserPoolId
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: TrelloAppUserPoolClientId
+

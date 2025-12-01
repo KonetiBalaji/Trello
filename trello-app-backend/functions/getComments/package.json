@@ -1,0 +1,11 @@
+{
+  "name": "get-comments",
+  "version": "1.0.0",
+  "description": "Lambda function to get comments for a task",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0"
+  }
+}
+

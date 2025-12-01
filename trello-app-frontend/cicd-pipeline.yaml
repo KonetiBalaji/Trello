@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CI/CD Pipeline for Trello App Frontend
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository URL (e.g., https://github.com/username/repo.git)
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: GitHub branch to deploy
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: GitHub personal access token
+  S3BucketName:
+    Type: String
+    Description: S3 bucket name for hosting frontend
+  CloudFrontDistributionId:
+    Type: String
+    Description: CloudFront distribution ID (optional)
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID from backend
+  UserPoolClientId:
+    Type: String
+    Description: Cognito User Pool Client ID from backend
+  ApiUrl:
+    Type: String
+    Description: API Gateway URL from backend
+
+Resources:
+  # S3 Bucket for Artifacts
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'trello-app-frontend-artifacts-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+
+  # CodeBuild Project for Frontend
+  FrontendBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: trello-app-frontend-build
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: S3
+        Location: !Ref ArtifactsBucket
+        Name: frontend-build
+        Packaging: ZIP
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: REACT_APP_USER_POOL_ID
+            Value: !Ref UserPoolId
+          - Name: REACT_APP_USER_POOL_CLIENT_ID
+            Value: !Ref UserPoolClientId
+          - Name: REACT_APP_API_URL
+            Value: !Ref ApiUrl
+          - Name: REACT_APP_AWS_REGION
+            Value: !Ref AWS::Region
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubRepo
+        BuildSpec: buildspec.yml
+        Auth:
+          Type: OAUTH
+          Resource: !Ref GitHubToken
+
+  # CodePipeline
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: trello-app-frontend-pipeline
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactsBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: !Select [3, !Split ['/', !Ref GitHubRepo]]
+                Repo: !Select [4, !Split ['/', !Ref GitHubRepo]]
+                Branch: !Ref GitHubBranch
+                OAuthToken: !Ref GitHubToken
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref FrontendBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Deploy
+          Actions:
+            - Name: DeployToS3
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: 1
+              Configuration:
+                BucketName: !Ref S3BucketName
+                Extract: true
+              InputArtifacts:
+                - Name: BuildOutput
+
+  # IAM Roles
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                  - cloudfront:CreateInvalidation
+                Resource: '*'
+
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                  - codebuild:*
+                Resource: '*'
+
+Outputs:
+  PipelineName:
+    Description: Name of the CodePipeline
+    Value: !Ref Pipeline
+  ArtifactsBucket:
+    Description: S3 bucket for artifacts
+    Value: !Ref ArtifactsBucket
+

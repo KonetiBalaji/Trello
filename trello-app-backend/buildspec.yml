@@ -1,0 +1,24 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo Installing SAM CLI
+      - pip install aws-sam-cli
+      - echo Installing dependencies
+      - npm install -g npm@latest
+  build:
+    commands:
+      - echo Build started on `date`
+      - sam build
+  post_build:
+    commands:
+      - echo Build completed on `date`
+
+artifacts:
+  files:
+    - '**/*'
+  base-directory: '.aws-sam'
+

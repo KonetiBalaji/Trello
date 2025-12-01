@@ -1,0 +1,12 @@
+{
+  "name": "scheduled-reminder-checker",
+  "version": "1.0.0",
+  "description": "Scheduled Lambda to check for tasks due soon and send reminders",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-sqs": "^3.0.0"
+  }
+}
+

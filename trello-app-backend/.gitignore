@@ -1,0 +1,9 @@
+.aws-sam/
+samconfig.toml
+node_modules/
+*.log
+.DS_Store
+*.swp
+*.swo
+*~
+
