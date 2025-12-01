@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTasks } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { Task } from '../../types';
 import { formatDateForInput } from '../../utils/dateFormatter';
 import './TaskModal.css';
 

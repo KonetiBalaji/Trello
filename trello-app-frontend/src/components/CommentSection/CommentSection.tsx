@@ -17,6 +17,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ taskId }) => {
 
   useEffect(() => {
     loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
   const loadComments = async () => {

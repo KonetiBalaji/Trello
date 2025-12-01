@@ -1,21 +1,28 @@
-// Using dynamic import to handle module resolution issues with aws-amplify v5
-// This ensures the module is loaded at runtime even if webpack has resolution issues during build
+import { Auth } from '@aws-amplify/auth';
+
+/**
+ * Fetches the current user's authentication token
+ * @returns Promise that resolves to the JWT token string
+ */
 export const fetchCurrentUserToken = async (): Promise<string> => {
   try {
-    // Dynamic import to handle webpack module resolution
-    const authModule = await import('aws-amplify/auth');
-    const fetchAuthSession = authModule.fetchAuthSession;
+    // In Amplify v5, use Auth.currentSession() to get the session
+    const session = await Auth.currentSession();
+    const idToken = session.getIdToken();
     
-    const session = await fetchAuthSession();
-    const idToken = session.tokens?.idToken;
     if (!idToken) {
-      throw new Error('No authentication token found');
+      throw new Error('No authentication token found. Please sign in again.');
     }
-    // In Amplify v5, idToken is a JWT object with a toString method
-    return idToken.toString();
+    
+    // Get the JWT token string
+    return idToken.getJwtToken();
   } catch (error) {
     console.error('Error fetching auth token:', error);
-    throw error;
+    throw new Error(
+      error instanceof Error 
+        ? `Failed to get authentication token: ${error.message}`
+        : 'Failed to get authentication token'
+    );
   }
 };
 

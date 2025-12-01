@@ -15,6 +15,7 @@ const ActivityLog: React.FC<ActivityLogProps> = ({ taskId }) => {
 
   useEffect(() => {
     loadActivityLog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
 
   const loadActivityLog = async () => {
