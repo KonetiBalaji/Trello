@@ -94,6 +94,19 @@ const TaskBoard: React.FC = () => {
               <li>Check browser console (F12) for detailed error messages</li>
               <li>Ensure CORS is configured correctly in the API Gateway</li>
             </ul>
+            <p><strong>Quick Fix:</strong></p>
+            <ol>
+              <li>Go to <a href="https://console.aws.amazon.com/apigateway" target="_blank" rel="noopener noreferrer">API Gateway Console</a></li>
+              <li>Select your API (TrelloAppApi)</li>
+              <li>Go to "Actions" → "Enable CORS"</li>
+              <li>Set Access-Control-Allow-Origin to <code>*</code></li>
+              <li>Click "Enable CORS and replace existing CORS headers"</li>
+              <li><strong>IMPORTANT:</strong> Click "Deploy API" to the <code>prod</code> stage</li>
+              <li>Wait a few minutes, then refresh this page</li>
+            </ol>
+            <p style={{marginTop: '15px', fontSize: '12px', color: '#666'}}>
+              API URL: <code>{process.env.REACT_APP_API_URL || 'Not configured'}</code>
+            </p>
           </div>
         )}
       </div>

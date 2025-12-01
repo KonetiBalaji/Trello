@@ -149,6 +149,8 @@ Resources:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
+        AllowCredentials: false
+        MaxAge: "'600'"
 
   # Lambda Functions - Task CRUD
   CreateTaskFunction:
@@ -178,6 +180,8 @@ Resources:
             RestApiId: !Ref TrelloApi
             Path: /tasks
             Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   UpdateTaskFunction:
     Type: AWS::Serverless::Function
@@ -250,6 +254,48 @@ Resources:
             RestApiId: !Ref TrelloApi
             Path: /tasks/{taskId}/activity
             Method: GET
+
+  # CORS Handler for OPTIONS requests
+  CorsHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CorsHandlerFunction
+      CodeUri: functions/corsHandler/
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Events:
+        OptionsTasks:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        OptionsTaskId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        OptionsComments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}/comments
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+        OptionsActivity:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TrelloApi
+            Path: /tasks/{taskId}/activity
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   # SQS Consumer Lambdas
   SqsActivityLoggerFunction:
