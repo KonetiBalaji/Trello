@@ -202,6 +202,66 @@
   color: #d32f2f;
 }
 
+.error-message {
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.error-help {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  text-align: left;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.error-help p {
+  margin: 10px 0;
+  color: #856404;
+  font-size: 14px;
+}
+
+.error-help p:first-child {
+  margin-top: 0;
+}
+
+.error-help p:last-child {
+  margin-bottom: 0;
+}
+
+.error-help code {
+  background-color: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  color: #d32f2f;
+  font-size: 13px;
+}
+
+.error-help ul {
+  margin: 10px 0;
+  padding-left: 20px;
+  color: #856404;
+  font-size: 14px;
+}
+
+.error-help ul li {
+  margin: 5px 0;
+}
+
+.error-help a {
+  color: #0079bf;
+  text-decoration: underline;
+}
+
+.error-help a:hover {
+  color: #005a8f;
+}
+
 @media (max-width: 768px) {
   .board-columns {
     grid-template-columns: 1fr;

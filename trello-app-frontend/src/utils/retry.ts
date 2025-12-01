@@ -16,14 +16,36 @@ export const retryWithBackoff = async <T>(
     try {
       return await fn();
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      
-      // Don't retry on 4xx errors (client errors)
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { status?: number } };
+      // Enhanced error handling for axios errors
+      if (error && typeof error === 'object' && 'isAxiosError' in error) {
+        const axiosError = error as any;
+        
+        // Don't retry on 4xx errors (client errors)
         if (axiosError.response?.status && axiosError.response.status >= 400 && axiosError.response.status < 500) {
-          throw lastError;
+          const status = axiosError.response.status;
+          const message = axiosError.response?.data?.message || axiosError.message || 'Request failed';
+          throw new Error(`${message} (Status: ${status})`);
         }
+        
+        // Handle network errors with more context
+        if (axiosError.code === 'ERR_NETWORK' || axiosError.message === 'Network Error') {
+          const apiUrl = process.env.REACT_APP_API_URL;
+          if (!apiUrl) {
+            throw new Error('API URL is not configured. Please check REACT_APP_API_URL environment variable.');
+          }
+          if (attempt === maxRetries) {
+            throw new Error(`Network Error: Unable to connect to API at ${apiUrl}. Please check if the API is running and CORS is configured correctly.`);
+          }
+        }
+        
+        // Handle other axios errors
+        lastError = new Error(
+          axiosError.response?.data?.message || 
+          axiosError.message || 
+          'Request failed'
+        );
+      } else {
+        lastError = error instanceof Error ? error : new Error(String(error));
       }
       
       // If this was the last attempt, throw the error

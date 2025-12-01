@@ -42,11 +42,23 @@ export const TaskProvider: React.FC<TaskProviderProps> = ({ children }) => {
       setLoading(true);
       setError(null);
       const token = await fetchCurrentUserToken();
+      
+      // Log API URL for debugging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('API URL:', process.env.REACT_APP_API_URL);
+      }
+      
       const fetchedTasks = await taskService.getTasks(token);
       setTasks(fetchedTasks);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch tasks';
+      setError(errorMessage);
       console.error('Error fetching tasks:', err);
+      
+      // Log additional diagnostic info
+      if (!process.env.REACT_APP_API_URL) {
+        console.error('REACT_APP_API_URL is not set. Please configure it in AWS Amplify environment variables.');
+      }
     } finally {
       setLoading(false);
     }

@@ -73,7 +73,31 @@ const TaskBoard: React.FC = () => {
   }
 
   if (error) {
-    return <div className="error">Error: {error}</div>;
+    const isApiUrlError = error.includes('API URL') || error.includes('REACT_APP_API_URL');
+    return (
+      <div className="error">
+        <div className="error-message">Error: {error}</div>
+        {isApiUrlError && (
+          <div className="error-help">
+            <p><strong>Configuration Issue:</strong></p>
+            <p>Please set the <code>REACT_APP_API_URL</code> environment variable in AWS Amplify Console.</p>
+            <p>Expected value: <code>https://ngffw8m38d.execute-api.us-east-1.amazonaws.com/prod</code></p>
+            <p>See <a href="https://console.aws.amazon.com/amplify" target="_blank" rel="noopener noreferrer">AWS Amplify Console</a> → Your App → Environment variables</p>
+          </div>
+        )}
+        {error.includes('Network Error') && !isApiUrlError && (
+          <div className="error-help">
+            <p><strong>Troubleshooting:</strong></p>
+            <ul>
+              <li>Check if the API Gateway URL is correct in AWS Amplify environment variables</li>
+              <li>Verify the API Gateway is deployed and accessible</li>
+              <li>Check browser console (F12) for detailed error messages</li>
+              <li>Ensure CORS is configured correctly in the API Gateway</li>
+            </ul>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
