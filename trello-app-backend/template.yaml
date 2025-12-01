@@ -159,6 +159,13 @@ Resources:
       FunctionName: CreateTaskFunction
       CodeUri: functions/createTask/
       Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ActivityLogQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ReminderQueue.QueueName
       Events:
         ApiEvent:
           Type: Api
@@ -173,6 +180,9 @@ Resources:
       FunctionName: GetTasksFunction
       CodeUri: functions/getTasks/
       Handler: index.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TasksTable
       Events:
         ApiEvent:
           Type: Api
@@ -189,6 +199,11 @@ Resources:
       FunctionName: UpdateTaskFunction
       CodeUri: functions/updateTask/
       Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ActivityLogQueue.QueueName
       Events:
         ApiEvent:
           Type: Api
@@ -203,6 +218,11 @@ Resources:
       FunctionName: DeleteTaskFunction
       CodeUri: functions/deleteTask/
       Handler: index.handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref TasksTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ActivityLogQueue.QueueName
       Events:
         ApiEvent:
           Type: Api
@@ -218,6 +238,11 @@ Resources:
       FunctionName: AddCommentFunction
       CodeUri: functions/addComment/
       Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CommentsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ActivityLogQueue.QueueName
       Events:
         ApiEvent:
           Type: Api
@@ -232,6 +257,9 @@ Resources:
       FunctionName: GetCommentsFunction
       CodeUri: functions/getComments/
       Handler: index.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CommentsTable
       Events:
         ApiEvent:
           Type: Api
@@ -247,6 +275,9 @@ Resources:
       FunctionName: GetActivityLogFunction
       CodeUri: functions/getActivityLog/
       Handler: index.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ActivityLogTable
       Events:
         ApiEvent:
           Type: Api
@@ -304,6 +335,11 @@ Resources:
       FunctionName: SqsActivityLoggerFunction
       CodeUri: functions/sqsActivityLogger/
       Handler: index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ActivityLogTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ActivityLogQueue.QueueName
       Events:
         ActivityLogQueueEvent:
           Type: SQS
@@ -320,6 +356,11 @@ Resources:
       FunctionName: SqsReminderProcessorFunction
       CodeUri: functions/sqsReminderProcessor/
       Handler: index.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TasksTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ReminderQueue.QueueName
       Events:
         ReminderQueueEvent:
           Type: SQS
@@ -337,6 +378,11 @@ Resources:
       CodeUri: functions/scheduledReminderChecker/
       Handler: index.handler
       Timeout: 60
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TasksTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ReminderQueue.QueueName
       Events:
         DailyReminderCheck:
           Type: Schedule
